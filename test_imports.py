@@ -1,5 +1,5 @@
 try:
-    import markdown
+    import Markdown
     print("✅ markdown imported successfully")
 except ImportError as e:
     print(f"❌ markdown import failed: {e}")
