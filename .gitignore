@@ -4,16 +4,20 @@ __pycache__/
 *$py.class
 *.so
 .Python
-venv/
-env/
-ENV/
+*.pyc
+
 
 # IDE
 .idea/
 .vscode/
+*.iml
+workspace.xml
 
 # Environment variables
 .env
+venv/
+env/
+ENV/
 
 # Campaign files (for now - you'll decide later if you want to version these)
 campaign_files/

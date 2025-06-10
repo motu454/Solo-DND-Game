@@ -2,11 +2,10 @@
 Campaign File Manager - Loads and parses your existing campaign files
 """
 import re
+import markdown
 from pathlib import Path
 from typing import Dict, List, Optional, Any
 from datetime import datetime
-import markdown
-
 from .models import CampaignFile, NPC, Location, Mission, CharacterStats
 
 
