@@ -6,7 +6,7 @@ import markdown
 from pathlib import Path
 from typing import Dict, List, Optional, Any
 from datetime import datetime
-from .models import CampaignFile, NPC, Location, Mission, CharacterStats
+from .models import CampaignFile, NPC, Location, Mission, CharacterStats, TrustLevel, MissionStatus
 
 
 class CampaignFileManager:
@@ -109,8 +109,18 @@ class CampaignFileManager:
             stars = match.group(2)
             status_tag = match.group(3) if match.group(3) else ""
 
-            # Count stars for trust level
-            trust_level = len(stars)
+            # Count stars for relationship level (convert to TrustLevel)
+            star_count = len(stars)
+            if star_count >= 5:
+                relationship = TrustLevel.DEVOTED
+            elif star_count >= 4:
+                relationship = TrustLevel.ALLIED
+            elif star_count >= 3:
+                relationship = TrustLevel.FRIENDLY
+            elif star_count >= 2:
+                relationship = TrustLevel.NEUTRAL
+            else:
+                relationship = TrustLevel.UNFRIENDLY
 
             # Extract the section content for this NPC
             start_pos = match.end()
@@ -123,18 +133,25 @@ class CampaignFileManager:
 
             # Parse role, relationship, etc. from the section
             role = self._extract_field(section_content, r'\*\*Role:\*\* (.+?)(?:\n|$)')
-            relationship = self._extract_field(section_content, r'\*\*Relationship:\*\* (.+?)(?:\n|$)')
-            capabilities = self._extract_field(section_content, r'\*\*Capabilities:\*\* (.+?)(?:\n|$)')
+            capabilities_text = self._extract_field(section_content, r'\*\*Capabilities:\*\* (.+?)(?:\n|$)')
             current_status = self._extract_field(section_content, r'\*\*Current Status:\*\* (.+?)(?:\n|$)')
 
+            # Parse capabilities into list
+            capabilities = []
+            if capabilities_text:
+                capabilities = [cap.strip() for cap in capabilities_text.split(',')]
+
+            # Create NPC with correct field names
             npc = NPC(
                 name=name,
                 role=role or "",
-                relationship=relationship or "",
-                trust_level=trust_level,
-                capabilities=[capabilities] if capabilities else [],
+                relationship=relationship,  # Use TrustLevel enum, not trust_level
+                capabilities=capabilities,
                 current_status=current_status or "",
-                notes=status_tag
+                notes=status_tag,
+                description="",  # Add default values for required fields
+                location="",
+                trust_points=star_count,  # Store star count as trust points
             )
             npcs.append(npc)
 
@@ -176,16 +193,51 @@ class CampaignFileManager:
         matches = re.finditer(mission_pattern, content)
 
         for match in matches:
-            title = match.group(1)
-            status = match.group(2)
+            name = match.group(1)  # Use 'name' instead of 'title'
+            status_text = match.group(2)
 
+            # Convert status text to MissionStatus enum
+            status_lower = status_text.lower()
+            if "complete" in status_lower:
+                status = MissionStatus.COMPLETED
+            elif "active" in status_lower:
+                status = MissionStatus.ACTIVE
+            elif "failed" in status_lower:
+                status = MissionStatus.FAILED
+            elif "hold" in status_lower:
+                status = MissionStatus.ON_HOLD
+            else:
+                status = MissionStatus.NOT_STARTED
+
+            # Extract mission content
+            start_pos = match.end()
+            next_match = re.search(r'\n### ', content[start_pos:])
+            if next_match:
+                section_content = content[start_pos:start_pos + next_match.start()]
+            else:
+                section_content = content[start_pos:]
+
+            # Extract description and objectives
+            description = self._extract_field(section_content, r'\*\*Description:\*\* (.+?)(?:\n|$)') or ""
+            objectives = []
+
+            # Look for objectives list
+            obj_pattern = r'- (.+?)(?:\n|$)'
+            obj_matches = re.finditer(obj_pattern, section_content)
+            for obj_match in obj_matches:
+                objectives.append(obj_match.group(1).strip())
+
+            # Create Mission with correct field names
             mission = Mission(
-                title=title,
-                status=status,
-                priority=1 if "PRIORITY 1" in content[match.start():match.start() + 200] else 2
+                name=name,  # Use 'name' instead of 'title'
+                status=status,  # Use MissionStatus enum
+                description=description,
+                objectives=objectives,
+                priority="high" if "PRIORITY 1" in content[match.start():match.start() + 200] else "medium"
             )
             missions.append(mission)
 
+        print(f"📝 Parsed {len(missions)} missions")
         return missions
 
     def _parse_quick_reference(self, content: str) -> Dict[str, Any]:

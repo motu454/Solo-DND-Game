@@ -2,11 +2,10 @@
 The Fey Bargain Game - Main Entry Point
 """
 import asyncio
-import sys
 import os
 from pathlib import Path
 from dotenv import load_dotenv
-from src.cli.game_interface import GameInterface
+from ui import GameInterface
 
 async def main():
     """Main application entry point"""

@@ -1,11 +1,10 @@
 """
 Enhanced Game Interface with Claude Integration
 """
-import asyncio
-from typing import List, Dict, Any
-from src.campaign.file_manager import CampaignFileManager
-from src.ai.claude_service import ClaudeService, SystemPromptBuilder
-from src.ai.context_manager import GameContextManager
+from typing import List, Dict
+from ui import CampaignFileManager
+from ui import ClaudeService, SystemPromptBuilder
+from ui import GameContextManager
 
 
 class GameInterface:
@@ -147,13 +146,16 @@ class GameInterface:
             if 'current_location' in qr:
                 print(f"📍 Location: {qr['current_location']}")
 
-        # Top NPCs
+        # Top NPCs - Fixed the trust_level issue!
         npcs = self.file_manager.get_npcs()
         if npcs:
             print(f"\n👥 Key NPCs:")
-            top_npcs = sorted(npcs, key=lambda x: x.trust_level or 0, reverse=True)[:5]
+            # Use trust_points instead of trust_level
+            top_npcs = sorted(npcs, key=lambda x: getattr(x, 'trust_points', 0), reverse=True)[:5]
             for npc in top_npcs:
-                stars = "⭐" * npc.trust_level
+                # Use trust_points to display stars
+                trust_points = getattr(npc, 'trust_points', 0)
+                stars = "⭐" * max(0, min(5, trust_points))  # Limit to 5 stars max
                 print(f"   {npc.name} {stars}")
 
         print("-" * 30)

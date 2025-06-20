@@ -6,7 +6,6 @@ Run this to check if everything is working correctly
 
 import asyncio
 import sys
-import os
 from pathlib import Path
 
 # Add src to Python path
@@ -18,16 +17,16 @@ def test_imports():
     print("🧪 Testing imports...")
 
     try:
-        from src.config.settings import Settings, get_settings
+        from ui import Settings, get_settings
         print("✅ Settings module imported")
 
-        from src.campaign.models import Character, GameSession, DiceRoll
+        from ui import Character, GameSession, DiceRoll
         print("✅ Models module imported")
 
-        from src.game.dice import DiceRoller, DiceUtils
+        from ui import DiceRoller, DiceUtils
         print("✅ Dice module imported")
 
-        from src.campaign.session_manager import SessionManager
+        from ui import SessionManager
         print("✅ Session manager imported")
 
         return True
@@ -41,7 +40,7 @@ def test_configuration():
     print("\n🔧 Testing configuration...")
 
     try:
-        from src.config.settings import get_settings
+        from ui import get_settings
         settings = get_settings()
 
         print(f"✅ Settings loaded successfully")
@@ -66,7 +65,7 @@ def test_dice_system():
     print("\n🎲 Testing dice system...")
 
     try:
-        from src.game.dice import DiceRoller, DiceUtils
+        from ui import DiceRoller, DiceUtils
 
         roller = DiceRoller()
 
@@ -98,7 +97,7 @@ def test_character_creation():
     print("\n👤 Testing character creation...")
 
     try:
-        from src.campaign.models import Character
+        from ui import Character
 
         # Create test character
         character = Character(
@@ -136,7 +135,7 @@ async def test_session_manager():
     print("\n📝 Testing session manager...")
 
     try:
-        from src.campaign.session_manager import SessionManager
+        from ui import SessionManager
 
         # Create session manager
         session_manager = SessionManager()

@@ -1,37 +1,57 @@
 # src/campaign/models.py
 """
-Enhanced Game Models with Session Support
-Data structures for campaign management - think Terraform resource definitions
+Data models for the Fey Bargain Game
+Think of these like Terraform resource definitions - structured, validated, and type-safe!
 """
 
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Any
-from datetime import datetime
 from enum import Enum
-import uuid
+from datetime import datetime
 
 
 class TrustLevel(Enum):
-    """NPC trust levels (like security group rules - from hostile to trusted)"""
+    """NPC relationship levels"""
     ENEMY = -5
     HOSTILE = -4
     UNFRIENDLY = -3
     NEUTRAL = -2
-    CAUTIOUS = -1
-    UNKNOWN = 0
+    INDIFFERENT = -1
     FRIENDLY = 1
     HELPFUL = 2
     ALLIED = 3
-    TRUSTED = 4
-    FAMILY = 5
+    DEVOTED = 4
+    FANATICAL = 5
 
 
-class SessionState(Enum):
-    """Session lifecycle states"""
+class MissionStatus(Enum):
+    """Mission status tracking"""
+    NOT_STARTED = "not_started"
     ACTIVE = "active"
-    PAUSED = "paused"
     COMPLETED = "completed"
-    ARCHIVED = "archived"
+    FAILED = "failed"
+    ON_HOLD = "on_hold"
+
+
+class LocationType(Enum):
+    """Types of locations in the campaign"""
+    SETTLEMENT = "settlement"
+    DUNGEON = "dungeon"
+    WILDERNESS = "wilderness"
+    BUILDING = "building"
+    REGION = "region"
+
+
+@dataclass
+class DiceRoll:
+    """Represents a dice roll result"""
+    dice_type: int
+    num_dice: int
+    modifier: int
+    total: int
+    rolls: List[int]
+    advantage: bool = False
+    disadvantage: bool = False
 
 
 @dataclass
@@ -39,299 +59,206 @@ class Character:
     """Player character data model"""
     name: str
     level: int = 1
-    hit_points: int = 10
-    max_hit_points: int = 10
+    hit_points: int = 8
+    max_hit_points: int = 8
     armor_class: int = 10
-    
-    # Core stats
+
+    # Ability scores
     strength: int = 10
     dexterity: int = 10
     constitution: int = 10
     intelligence: int = 10
     wisdom: int = 10
     charisma: int = 10
-    
-    # Skills and abilities
+
+    # Character details
+    race: str = ""
+    character_class: str = ""
+    background: str = ""
+    alignment: str = ""
+
+    # Skills (modifier values)
     skills: Dict[str, int] = field(default_factory=dict)
+
+    # Equipment and inventory
     equipment: List[str] = field(default_factory=list)
-    spells: List[str] = field(default_factory=list)
-    
-    # Character progression
-    experience: int = 0
+    gold: int = 0
+
+    # Character personality
+    personality_traits: List[str] = field(default_factory=list)
+    ideals: List[str] = field(default_factory=list)
+    bonds: List[str] = field(default_factory=list)
+    flaws: List[str] = field(default_factory=list)
+
+    # Progression tracking
+    experience_points: int = 0
     proficiency_bonus: int = 2
-    
-    # Current state
-    conditions: List[str] = field(default_factory=list)  # poisoned, exhausted, etc.
-    temporary_hp: int = 0
-    spell_slots: Dict[str, int] = field(default_factory=dict)
-    
-    def get_modifier(self, ability_score: int) -> int:
+
+    def get_ability_modifier(self, ability_score: int) -> int:
         """Calculate ability modifier from score"""
         return (ability_score - 10) // 2
-    
+
     def get_skill_modifier(self, skill_name: str) -> int:
-        """Get total modifier for a skill check"""
-        base_modifier = self.skills.get(skill_name, 0)
-        
-        # Add ability modifier based on skill type
-        skill_abilities = {
-            'acrobatics': self.dexterity,
-            'athletics': self.strength,
-            'deception': self.charisma,
-            'history': self.intelligence,
-            'insight': self.wisdom,
-            'intimidation': self.charisma,
-            'investigation': self.intelligence,
-            'perception': self.wisdom,
-            'persuasion': self.charisma,
-            'stealth': self.dexterity,
-            # Add more as needed
-        }
-        
-        ability_score = skill_abilities.get(skill_name.lower(), 10)
-        ability_modifier = self.get_modifier(ability_score)
-        
-        return base_modifier + ability_modifier
-    
-    def take_damage(self, damage: int):
-        """Apply damage to character"""
-        if self.temporary_hp > 0:
-            if damage <= self.temporary_hp:
-                self.temporary_hp -= damage
-                return
-            else:
-                damage -= self.temporary_hp
-                self.temporary_hp = 0
-        
-        self.hit_points = max(0, self.hit_points - damage)
-    
-    def heal(self, healing: int):
-        """Heal character damage"""
-        self.hit_points = min(self.max_hit_points, self.hit_points + healing)
-    
-    def is_alive(self) -> bool:
-        """Check if character is alive"""
-        return self.hit_points > 0
-    
-    def is_unconscious(self) -> bool:
-        """Check if character is unconscious"""
-        return self.hit_points <= 0
+        """Get total modifier for a skill"""
+        return self.skills.get(skill_name, 0)
+
 
 @dataclass
-class CharacterStats:
-    """Basic character statistics for file parsing"""
-    level: int = 1
-    hit_points: int = 10
-    max_hit_points: int = 10
-    armor_class: int = 10
-
-@dataclass 
 class NPC:
     """Non-player character model"""
     name: str
     role: str = ""
     location: str = ""
-    trust_level: TrustLevel = TrustLevel.UNKNOWN
-    relationship: str = ""
-    capabilities: str = ""
+    relationship: TrustLevel = TrustLevel.NEUTRAL  # Use the enum
+    capabilities: List[str] = field(default_factory=list)
     current_status: str = ""
-    background: str = ""
-    
-    # Relationship tracking
-    interactions: List[Dict[str, Any]] = field(default_factory=list)
-    last_interaction: Optional[datetime] = None
-    disposition_changes: List[Dict[str, Any]] = field(default_factory=list)
-    
-    # Game mechanics
-    armor_class: int = 10
-    hit_points: int = 10
-    challenge_rating: float = 0.0
-    
-    def add_interaction(self, interaction_type: str, description: str, trust_change: int = 0):
-        """Record an interaction with this NPC"""
-        interaction = {
-            'timestamp': datetime.now(),
-            'type': interaction_type,
-            'description': description,
-            'trust_change': trust_change
-        }
-        
-        self.interactions.append(interaction)
-        self.last_interaction = datetime.now()
-        
-        # Apply trust level change
-        if trust_change != 0:
-            old_level = self.trust_level.value
-            new_level = max(-5, min(5, old_level + trust_change))
-            self.trust_level = TrustLevel(new_level)
-            
-            self.disposition_changes.append({
-                'timestamp': datetime.now(),
-                'old_level': old_level,
-                'new_level': new_level,
-                'reason': description
-            })
+    description: str = ""
+    notes: str = ""
+
+    # Trust tracking
+    trust_points: int = 0
+    faction_allegiance: str = ""
+
+    # Add this compatibility property!
+    @property
+    def trust_level(self) -> int:
+        """Compatibility property for trust_level access"""
+        return self.trust_points
+
+    def adjust_trust(self, points: int) -> None:
+        """Adjust trust level with this NPC"""
+        self.trust_points += points
+
+        # Update relationship enum based on trust points
+        if self.trust_points >= 20:
+            self.relationship = TrustLevel.DEVOTED
+        elif self.trust_points >= 15:
+            self.relationship = TrustLevel.ALLIED
+        elif self.trust_points >= 10:
+            self.relationship = TrustLevel.HELPFUL
+        elif self.trust_points >= 5:
+            self.relationship = TrustLevel.FRIENDLY
+        elif self.trust_points >= -5:
+            self.relationship = TrustLevel.NEUTRAL
+        elif self.trust_points >= -10:
+            self.relationship = TrustLevel.UNFRIENDLY
+        else:
+            self.relationship = TrustLevel.HOSTILE
 
 
 @dataclass
 class Location:
-    """Location/area model"""
+    """Location data model"""
     name: str
+    location_type: LocationType
     description: str = ""
-    region: str = ""
-    location_type: str = ""  # city, dungeon, wilderness, etc.
-    
-    # Connections
-    connected_locations: List[str] = field(default_factory=list)
-    travel_times: Dict[str, str] = field(default_factory=dict)
-    
-    # NPCs and features
+    connections: List[str] = field(default_factory=list)
     npcs_present: List[str] = field(default_factory=list)
-    notable_features: List[str] = field(default_factory=list)
-    available_services: List[str] = field(default_factory=list)
-    
-    # Environmental factors
+    items_available: List[str] = field(default_factory=list)
+    services_available: List[str] = field(default_factory=list)
+    danger_level: str = "safe"  # safe, low, medium, high, extreme
+    notes: str = ""
+
+    # Environmental details
     weather: str = ""
-    danger_level: str = "safe"  # safe, caution, dangerous, deadly
-    special_rules: List[str] = field(default_factory=list)
-    
-    # Visit tracking
-    times_visited: int = 0
-    last_visit: Optional[datetime] = None
-    discoveries: List[Dict[str, Any]] = field(default_factory=list)
-    
-    def visit(self):
-        """Record a visit to this location"""
-        self.times_visited += 1
-        self.last_visit = datetime.now()
+    lighting: str = ""
+    atmosphere: str = ""
 
 
 @dataclass
 class Mission:
-    """Quest/mission model"""
-    title: str
-    description: str
-    mission_type: str = "main"  # main, side, personal, faction
-    status: str = "active"  # active, completed, failed, abandoned
-    
-    # Mission details
+    """Mission/quest data model"""
+    name: str
+    status: MissionStatus = MissionStatus.NOT_STARTED
+    description: str = ""
     objectives: List[str] = field(default_factory=list)
     completed_objectives: List[str] = field(default_factory=list)
     rewards: List[str] = field(default_factory=list)
-    
-    # Tracking
-    giver: str = ""
-    location: str = ""
-    deadline: Optional[datetime] = None
-    priority: str = "normal"  # low, normal, high, urgent
-    
+
+    # Mission metadata
+    giver: str = ""  # NPC who gave the mission
+    location: str = ""  # Where mission takes place
+    deadline: Optional[str] = None
+    priority: str = "medium"  # low, medium, high, urgent
+
     # Progress tracking
-    progress_notes: List[Dict[str, Any]] = field(default_factory=list)
-    started_date: Optional[datetime] = None
-    completed_date: Optional[datetime] = None
-    
-    def add_progress(self, note: str, objective_completed: str = None):
-        """Add progress note to mission"""
-        progress = {
-            'timestamp': datetime.now(),
-            'note': note,
-            'objective_completed': objective_completed
-        }
-        
-        self.progress_notes.append(progress)
-        
-        if objective_completed and objective_completed not in self.completed_objectives:
-            self.completed_objectives.append(objective_completed)
-    
-    def is_completed(self) -> bool:
-        """Check if all objectives are completed"""
-        return len(self.completed_objectives) >= len(self.objectives)
-    
+    progress_notes: List[str] = field(default_factory=list)
+    related_npcs: List[str] = field(default_factory=list)
+    related_locations: List[str] = field(default_factory=list)
+
+    # Add this compatibility property!
+    @property
+    def title(self) -> str:
+        """Compatibility property for title access"""
+        return self.name
+
+    def add_progress(self, note: str) -> None:
+        """Add a progress note to the mission"""
+        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M")
+        self.progress_notes.append(f"[{timestamp}] {note}")
+
+    def complete_objective(self, objective: str) -> bool:
+        """Mark an objective as completed"""
+        if objective in self.objectives and objective not in self.completed_objectives:
+            self.completed_objectives.append(objective)
+            return True
+        return False
+
+    @property
     def completion_percentage(self) -> float:
-        """Get completion percentage"""
+        """Calculate mission completion percentage"""
         if not self.objectives:
             return 0.0
-        return len(self.completed_objectives) / len(self.objectives) * 100
+        return (len(self.completed_objectives) / len(self.objectives)) * 100
+
+@dataclass
+class Faction:
+    """Faction data model for tracking group relationships"""
+    name: str
+    relationship: TrustLevel = TrustLevel.NEUTRAL
+    description: str = ""
+    goals: List[str] = field(default_factory=list)
+    members: List[str] = field(default_factory=list)  # NPC names
+    territory: List[str] = field(default_factory=list)  # Location names
+    resources: List[str] = field(default_factory=list)
+
+    # Faction status
+    power_level: str = "minor"  # minor, moderate, major, dominant
+    activity_level: str = "active"  # dormant, active, aggressive
+
+    def add_member(self, npc_name: str) -> None:
+        """Add an NPC to this faction"""
+        if npc_name not in self.members:
+            self.members.append(npc_name)
 
 
 @dataclass
 class GameSession:
-    """Complete game session state"""
+    """Represents a single game session"""
     session_id: str
     character: Character
     current_scene: str = ""
     current_location: str = ""
-    
-    # Session metadata
     session_start: datetime = field(default_factory=datetime.now)
-    session_end: Optional[datetime] = None
-    state: SessionState = SessionState.ACTIVE
-    
-    # Game state
-    active_npcs: List[str] = field(default_factory=list)
     actions_taken: List[Dict[str, Any]] = field(default_factory=list)
     context_summary: str = ""
-    
-    # Campaign data reference
+
+    # Session metadata
     campaign_data: Dict[str, Any] = field(default_factory=dict)
-    
-    # Session statistics
-    dice_rolls: List[Dict[str, Any]] = field(default_factory=list)
-    scenes_played: int = 0
-    experience_gained: int = 0
-    
-    def add_action(self, action: str, result: str = None):
-        """Record a player action"""
-        action_record = {
-            'timestamp': datetime.now().isoformat(),
-            'action': action,
-            'result': result,
-            'scene_number': self.scenes_played
-        }
-        
-        self.actions_taken.append(action_record)
-    
-    def add_dice_roll(self, dice_type: int, count: int, modifier: int, total: int, purpose: str = None):
-        """Record a dice roll"""
-        roll_record = {
-            'timestamp': datetime.now().isoformat(),
-            'dice_type': dice_type,
-            'count': count,
-            'modifier': modifier,
-            'total': total,
-            'purpose': purpose
-        }
-        
-        self.dice_rolls.append(roll_record)
-    
-    def end_session(self):
-        """Mark session as completed"""
-        self.session_end = datetime.now()
-        self.state = SessionState.COMPLETED
-    
-    def get_duration(self) -> float:
-        """Get session duration in hours"""
-        end_time = self.session_end or datetime.now()
-        duration = end_time - self.session_start
-        return duration.total_seconds() / 3600
+    ai_context: List[Dict[str, str]] = field(default_factory=list)
 
+    def add_action(self, action: str, result: str = "") -> None:
+        """Add an action taken during the session"""
+        action_data = {
+            "timestamp": datetime.now().isoformat(),
+            "action": action,
+            "result": result
+        }
+        self.actions_taken.append(action_data)
 
-@dataclass
-class CampaignFile:
-    """Represents a loaded campaign file"""
-    filename: str
-    content: str
-    last_modified: datetime
-    parsed_data: Optional[Any] = None
-    file_type: str = "markdown"
-    
-    def get_size(self) -> int:
-        """Get file content size"""
-        return len(self.content)
-    
-    def get_word_count(self) -> int:
-        """Get approximate word count"""
-        return len(self.content.split())
+    def update_context(self, new_context: str) -> None:
+        """Update the session context summary"""
+        self.context_summary = new_context
 
 
 @dataclass
@@ -340,85 +267,164 @@ class CampaignState:
     campaign_name: str = ""
     current_session_id: Optional[str] = None
     total_sessions: int = 0
-    campaign_start_date: Optional[datetime] = None
-    last_played: Optional[datetime] = None
-
-    # Campaign progress
-    current_chapter: str = ""
-    major_events: List[str] = field(default_factory=list)
-    completed_missions: List[str] = field(default_factory=list)
-
-    # World state
+    active_character: Optional[str] = None
     current_location: str = ""
-    active_npcs: List[str] = field(default_factory=list)
-    faction_standings: Dict[str, int] = field(default_factory=dict)
+    campaign_status: str = "active"  # active, paused, completed
+    last_session_date: Optional[str] = None
+    total_playtime_minutes: int = 0
 
-    # Statistics
-    total_playtime_hours: float = 0.0
-    dice_rolls_made: int = 0
-    scenes_played: int = 0
+    # Campaign metadata
+    created_date: str = field(default_factory=lambda: datetime.now().isoformat())
+    last_modified: str = field(default_factory=lambda: datetime.now().isoformat())
+    version: str = "1.0"
+
+    # Story progression
+    major_events: List[str] = field(default_factory=list)
+    completed_arcs: List[str] = field(default_factory=list)
+    current_arc: str = ""
+
+    def __post_init__(self):
+        """Initialize derived fields"""
+        if not self.campaign_name:
+            self.campaign_name = "Fey Bargain Campaign"
+
+    def update_last_session(self, session_id: str) -> None:
+        """Update tracking for the most recent session"""
+        self.current_session_id = session_id
+        self.last_session_date = datetime.now().isoformat()
+        self.last_modified = datetime.now().isoformat()
+        self.total_sessions += 1
+
+    def add_major_event(self, event: str) -> None:
+        """Add a major story event to the campaign"""
+        timestamp = datetime.now().strftime("%Y-%m-%d")
+        self.major_events.append(f"[{timestamp}] {event}")
+        self.last_modified = datetime.now().isoformat()
+
 
 @dataclass
-class DiceRoll:
-    """Represents a dice roll result"""
-    dice_type: int  # 4, 6, 8, 10, 12, 20, 100
-    count: int
-    modifier: int = 0
-    advantage: bool = False
-    disadvantage: bool = False
-    
-    # Results
-    individual_rolls: List[int] = field(default_factory=list)
-    total: int = 0
-    is_critical: bool = False
-    is_fumble: bool = False
-    
-    def __post_init__(self):
-        """Calculate roll results"""
-        import random
-        
-        if self.advantage or self.disadvantage:
-            # Roll twice for advantage/disadvantage
-            roll1 = [random.randint(1, self.dice_type) for _ in range(self.count)]
-            roll2 = [random.randint(1, self.dice_type) for _ in range(self.count)]
-            
-            if self.advantage:
-                self.individual_rolls = [max(r1, r2) for r1, r2 in zip(roll1, roll2)]
-            else:
-                self.individual_rolls = [min(r1, r2) for r1, r2 in zip(roll1, roll2)]
-        else:
-            self.individual_rolls = [random.randint(1, self.dice_type) for _ in range(self.count)]
-        
-        # Calculate total
-        self.total = sum(self.individual_rolls) + self.modifier
-        
-        # Check for critical/fumble (only on d20)
-        if self.dice_type == 20 and self.count == 1:
-            natural_roll = self.individual_rolls[0]
-            self.is_critical = natural_roll == 20
-            self.is_fumble = natural_roll == 1
-    
-    def __str__(self) -> str:
-        """String representation of the roll"""
-        dice_notation = f"{self.count}d{self.dice_type}"
-        if self.modifier > 0:
-            dice_notation += f"+{self.modifier}"
-        elif self.modifier < 0:
-            dice_notation += f"{self.modifier}"
-        
-        result_parts = [f"Rolled {dice_notation}: {self.total}"]
-        
-        if len(self.individual_rolls) > 1:
-            result_parts.append(f"({'+'.join(map(str, self.individual_rolls))})")
-        
-        if self.is_critical:
-            result_parts.append("CRITICAL!")
-        elif self.is_fumble:
-            result_parts.append("FUMBLE!")
-        
-        if self.advantage:
-            result_parts.append("(Advantage)")
-        elif self.disadvantage:
-            result_parts.append("(Disadvantage)")
-        
-        return " ".join(result_parts)
+class CampaignFile:
+    """Represents a loaded campaign file"""
+    filename: str
+    content: str
+    metadata: Dict[str, Any] = field(default_factory=dict)
+    last_modified: datetime = field(default_factory=datetime.now)
+    file_type: str = "markdown"
+
+    def update_content(self, new_content: str) -> None:
+        """Update file content and timestamp"""
+        self.content = new_content
+        self.last_modified = datetime.now()
+
+
+@dataclass
+class CharacterStats:
+    """Character statistics parsed from character sheet"""
+    name: str = ""
+    level: int = 1
+    hit_points: int = 8
+    max_hit_points: int = 8
+    armor_class: int = 10
+
+    # Ability scores
+    strength: int = 10
+    dexterity: int = 10
+    constitution: int = 10
+    intelligence: int = 10
+    wisdom: int = 10
+    charisma: int = 10
+
+    # Character details
+    race: str = ""
+    character_class: str = ""
+    background: str = ""
+    alignment: str = ""
+
+    # Skills and modifiers
+    proficiency_bonus: int = 2
+    skills: Dict[str, int] = field(default_factory=dict)
+
+    # Resources
+    spell_slots: Dict[str, int] = field(default_factory=dict)
+    features: List[str] = field(default_factory=list)
+    equipment: List[str] = field(default_factory=list)
+
+    # Experience and progression
+    experience_points: int = 0
+
+    def get_ability_modifier(self, score: int) -> int:
+        """Calculate ability modifier from score"""
+        return (score - 10) // 2
+
+    def get_skill_modifier(self, skill_name: str) -> int:
+        """Get total modifier for a skill"""
+        base_modifier = self.skills.get(skill_name, 0)
+        return base_modifier + self.proficiency_bonus
+
+    def to_character(self) -> Character:
+        """Convert CharacterStats to Character model"""
+        return Character(
+            name=self.name,
+            level=self.level,
+            hit_points=self.hit_points,
+            max_hit_points=self.max_hit_points,
+            armor_class=self.armor_class,
+            strength=self.strength,
+            dexterity=self.dexterity,
+            constitution=self.constitution,
+            intelligence=self.intelligence,
+            wisdom=self.wisdom,
+            charisma=self.charisma,
+            race=self.race,
+            character_class=self.character_class,
+            background=self.background,
+            alignment=self.alignment,
+            skills=self.skills.copy(),
+            equipment=self.equipment.copy(),
+            experience_points=self.experience_points,
+            proficiency_bonus=self.proficiency_bonus
+        )
+
+# Utility functions for working with models
+
+def create_default_character() -> Character:
+    """Create a default character for testing"""
+    return Character(
+        name="Test Hero",
+        level=1,
+        hit_points=10,
+        max_hit_points=10,
+        race="Human",
+        character_class="Fighter",
+        background="Soldier"
+    )
+
+
+def create_sample_npc(name: str, role: str) -> NPC:
+    """Create a sample NPC for testing"""
+    return NPC(
+        name=name,
+        role=role,
+        relationship=TrustLevel.NEUTRAL,
+        location="Starting Village"
+    )
+
+
+def create_sample_mission(name: str, description: str) -> Mission:
+    """Create a sample mission for testing"""
+    return Mission(
+        name=name,
+        description=description,
+        status=MissionStatus.NOT_STARTED,
+        objectives=["Investigate the issue", "Report back to quest giver"],
+        priority="medium"
+    )
+
+
+# Export all models for easy importing
+__all__ = [
+    'TrustLevel', 'MissionStatus', 'LocationType',
+    'DiceRoll', 'Character', 'CharacterStats', 'NPC', 'Location', 'Mission', 'Faction',
+    'GameSession', 'CampaignState', 'CampaignFile',
+    'create_default_character', 'create_sample_npc', 'create_sample_mission'
+]

@@ -2,8 +2,8 @@
 Context Manager - Builds game context for Claude
 """
 from typing import Dict, Any, List, Optional
-from src.campaign.file_manager import CampaignFileManager
-from src.campaign.models import NPC, Mission
+from campaign.file_manager import CampaignFileManager
+from campaign.file_manager import NPC, Mission
 
 
 class GameContextManager:
