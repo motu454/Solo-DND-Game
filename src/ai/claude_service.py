@@ -98,7 +98,17 @@ class ClaudeService:
         if 'missions' in context and context['missions']:
             message_parts.append("## Active Missions")
             for mission in context['missions'][:3]:  # Top 3 missions
-                message_parts.append(f"- {mission.title} [{mission.status}]")
+                # Use 'name' instead of 'title' to match your Mission model
+                mission_name = getattr(mission, 'name', getattr(mission, 'title', 'Unknown Mission'))
+                mission_status = getattr(mission, 'status', 'Unknown')
+
+                # Handle both string status and enum status
+                if hasattr(mission_status, 'value'):
+                    status_display = mission_status.value
+                else:
+                    status_display = str(mission_status)
+
+                message_parts.append(f"- {mission_name} [{status_display}]")
             message_parts.append("")
 
         # Recent NPCs
